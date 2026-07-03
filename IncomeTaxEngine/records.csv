@@ -1,0 +1,2 @@
+Timestamp,GrossIncome,OtherDeductions,StandardDeduction,TaxableIncome,OldTax,NewTax,RecommendedRegime,FinalTax
+2026-07-04T01:50:54.412625200,700000.00,0.00,50000.00,650000.00,44200.00,20800.00,New Regime,44200.00
