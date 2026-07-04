@@ -4,13 +4,17 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class FileManager {
 
-    private static final String FILE_NAME = "records.csv";
+    private static final String FILE_NAME = System.getProperty("user.dir") + File.separator + "records.csv";
 
     // Appends the latest tax calculation to the file.
-    public void saveCalculation(TaxRecord record) {
+    public void saveRecord(String timestamp, double grossIncome, double otherDeductions, double standardDeduction,
+                           double taxableIncome, double oldTax, double newTax, String recommendedRegime,
+                           double finalTax) {
         File file = new File(FILE_NAME);
         boolean writeHeader = !file.exists() || file.length() == 0;
 
@@ -20,7 +24,8 @@ public class FileManager {
                 writer.newLine();
             }
 
-            writer.write(buildCsvLine(record));
+            appendToCSV(writer, timestamp, grossIncome, otherDeductions, standardDeduction, taxableIncome,
+                    oldTax, newTax, recommendedRegime, finalTax);
             writer.newLine();
         } catch (IOException exception) {
             System.out.println("Unable to save record: " + exception.getMessage());
@@ -28,7 +33,7 @@ public class FileManager {
     }
 
     // Reads and displays all saved records.
-    public void readSavedRecords() {
+    public void viewRecords() {
         File file = new File(FILE_NAME);
 
         if (!file.exists()) {
@@ -55,10 +60,34 @@ public class FileManager {
         }
     }
 
+    // Reads all saved records for the Swing table view.
+    public List<TaxCalculationRecord> readRecords() {
+        List<TaxCalculationRecord> records = new ArrayList<>();
+        File file = new File(FILE_NAME);
+
+        if (!file.exists()) {
+            return records;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                TaxCalculationRecord record = parseRecord(line);
+                if (record != null) {
+                    records.add(record);
+                }
+            }
+        } catch (IOException exception) {
+            System.out.println("Unable to read records: " + exception.getMessage());
+        }
+
+        return records;
+    }
+
     // Displays only the summary fields requested for saved calculations.
     private boolean displaySummaryLine(String line) {
         String[] columns = line.split(",");
-        if (columns.length < 9 || !columns[0].startsWith("\"") || !columns[0].contains("T")) {
+        if (columns.length < 9 || "Timestamp".equals(columns[0])) {
             return false;
         }
 
@@ -72,6 +101,28 @@ public class FileManager {
         return true;
     }
 
+    private TaxCalculationRecord parseRecord(String line) {
+        String[] columns = line.split(",");
+        if (columns.length < 9 || "Timestamp".equals(columns[0])) {
+            return null;
+        }
+
+        try {
+            return new TaxCalculationRecord(
+                    clean(columns[0]),
+                    Double.parseDouble(clean(columns[1])),
+                    Double.parseDouble(clean(columns[2])),
+                    Double.parseDouble(clean(columns[3])),
+                    Double.parseDouble(clean(columns[4])),
+                    Double.parseDouble(clean(columns[5])),
+                    Double.parseDouble(clean(columns[6])),
+                    clean(columns[7]),
+                    Double.parseDouble(clean(columns[8])));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
     // Removes CSV quotes for display only.
     private String clean(String value) {
         if (value == null) {
@@ -80,17 +131,19 @@ public class FileManager {
         return value.replace("\"", "");
     }
 
-    // Builds one CSV line from the employee data.
-    private String buildCsvLine(TaxRecord record) {
-        return escape(record.getTimestamp()) + ","
-                + format(record.getGrossIncome()) + ","
-                + format(record.getOtherDeductions()) + ","
-                + format(record.getStandardDeduction()) + ","
-                + format(record.getTaxableIncome()) + ","
-                + format(record.getOldTax()) + ","
-                + format(record.getNewTax()) + ","
-                + escape(record.getRecommendedRegime()) + ","
-                + format(record.getNetTax());
+    // Appends one CSV line.
+    public void appendToCSV(BufferedWriter writer, String timestamp, double grossIncome, double otherDeductions,
+                            double standardDeduction, double taxableIncome, double oldTax, double newTax,
+                            String recommendedRegime, double finalTax) throws IOException {
+        writer.write(escape(timestamp) + ","
+                + format(grossIncome) + ","
+                + format(otherDeductions) + ","
+                + format(standardDeduction) + ","
+                + format(taxableIncome) + ","
+                + format(oldTax) + ","
+                + format(newTax) + ","
+                + escape(recommendedRegime) + ","
+                + format(finalTax));
     }
 
     // Wraps text values for simple CSV safety.

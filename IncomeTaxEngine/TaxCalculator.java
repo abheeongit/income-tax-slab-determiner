@@ -1,47 +1,54 @@
 public class TaxCalculator {
 
+    private static final double[][] OLD_REGIME_SLABS = {
+        { 0, 250000, 0.00 },
+        { 250000, 500000, 0.05 },
+        { 500000, 1000000, 0.20 },
+        { 1000000, Double.MAX_VALUE, 0.30 }
+    };
+
+    private static final double[][] NEW_REGIME_SLABS = {
+        { 0, 300000, 0.00 },
+        { 300000, 600000, 0.05 },
+        { 600000, 900000, 0.10 },
+        { 900000, 1200000, 0.15 },
+        { 1200000, 1500000, 0.20 },
+        { 1500000, Double.MAX_VALUE, 0.30 }
+    };
+
+    private static final double OLD_REBATE_AMOUNT = 12500;
+    private static final double NEW_REBATE_AMOUNT = 25000;
+    private static final double CESS_RATE = 0.04;
+
     // Computes taxable income after deductions.
     public double calculateTaxableIncome(double grossIncome, double standardDeduction, double otherDeductions) {
         double taxableIncome = grossIncome - standardDeduction - otherDeductions;
         return Math.max(0.0, taxableIncome);
     }
 
-    // Calculates all tax values for the selected regime.
-    public TaxRecord calculateForRegime(double grossIncome, double standardDeduction, double otherDeductions,
-                                       double rebateThreshold, String regime) {
-        TaxRecord record = new TaxRecord();
+    // Calculates tax for the old regime.
+    public double[] calculateOldTax(double grossIncome, double standardDeduction, double otherDeductions,
+                                   double rebateThreshold) {
+        return calculateTaxBreakdown(grossIncome, standardDeduction, otherDeductions, rebateThreshold, "Old Regime");
+    }
+
+    // Calculates tax for the new regime.
+    public double[] calculateNewTax(double grossIncome, double standardDeduction, double otherDeductions,
+                                   double rebateThreshold) {
+        return calculateTaxBreakdown(grossIncome, standardDeduction, otherDeductions, rebateThreshold, "New Regime");
+    }
+
+    // Calculates the full tax breakdown for one regime.
+    // Returns: taxable income, gross tax, rebate, tax after rebate, cess, net tax.
+    public double[] calculateTaxBreakdown(double grossIncome, double standardDeduction, double otherDeductions,
+                                          double rebateThreshold, String regime) {
         double taxableIncome = calculateTaxableIncome(grossIncome, standardDeduction, otherDeductions);
         double grossTax = calculateMarginalTax(taxableIncome, getSlabs(regime));
-        double rebate = calculateRebate(taxableIncome, grossTax, rebateThreshold, regime);
+        double rebate = applyRebate(taxableIncome, grossTax, rebateThreshold, regime);
         double taxAfterRebate = round(grossTax - rebate);
         double cess = calculateCess(taxAfterRebate);
         double netTax = round(taxAfterRebate + cess);
-
-        record.setGrossIncome(grossIncome);
-        record.setStandardDeduction(standardDeduction);
-        record.setOtherDeductions(otherDeductions);
-        record.setRebateThreshold(rebateThreshold);
-        record.setTaxableIncome(taxableIncome);
-        record.setGrossTax(grossTax);
-        record.setRebate(rebate);
-        record.setTaxAfterRebate(taxAfterRebate);
-        record.setCess(cess);
-        record.setNetTax(netTax);
-        return record;
-    }
-
-    // Computes the old-regime final tax including rebate and cess.
-    public double calculateOldTax(double taxableIncome) {
-        double tax = calculateMarginalTax(taxableIncome, TaxSlabs.OLD_REGIME_SLABS);
-        tax = applyRebate(taxableIncome, tax, "Old Regime");
-        return tax + calculateCess(tax);
-    }
-
-    // Computes the new-regime final tax including rebate and cess.
-    public double calculateNewTax(double taxableIncome) {
-        double tax = calculateMarginalTax(taxableIncome, TaxSlabs.NEW_REGIME_SLABS);
-        tax = applyRebate(taxableIncome, tax, "New Regime");
-        return tax + calculateCess(tax);
+        return new double[] { taxableIncome, grossTax, rebate, taxAfterRebate, cess, netTax };
     }
 
     // Applies marginal taxation across the supplied slab table.
@@ -67,15 +74,7 @@ public class TaxCalculator {
     }
 
     // Applies the rebate before cess is added.
-    public double applyRebate(double taxableIncome, double tax, String regime) {
-        if (taxableIncome <= getRebateThreshold(regime)) {
-            tax = Math.max(0.0, tax - getRebateAmount(regime));
-        }
-        return round(tax);
-    }
-
-    // Calculates rebate for the chosen regime using the user-provided threshold.
-    public double calculateRebate(double taxableIncome, double grossTax, double rebateThreshold, String regime) {
+    public double applyRebate(double taxableIncome, double grossTax, double rebateThreshold, String regime) {
         if (taxableIncome <= rebateThreshold) {
             return round(Math.min(grossTax, getRebateAmount(regime)));
         }
@@ -84,11 +83,11 @@ public class TaxCalculator {
 
     // Calculates health and education cess on the tax amount.
     public double calculateCess(double tax) {
-        return round(tax * TaxSlabs.CESS_RATE);
+        return round(tax * CESS_RATE);
     }
 
-    // Recommends the cheaper regime.
-    public String recommendRegime(double oldFinalTax, double newFinalTax) {
+    // Compares both regimes and returns the cheaper one.
+    public String compareRegimes(double oldFinalTax, double newFinalTax) {
         if (Math.abs(oldFinalTax - newFinalTax) < 0.01) {
             return "Either Regime";
         }
@@ -98,30 +97,19 @@ public class TaxCalculator {
     // Returns the slab table for the selected regime.
     public double[][] getSlabs(String regime) {
         if ("Old Regime".equals(regime)) {
-            return TaxSlabs.OLD_REGIME_SLABS;
+            return OLD_REGIME_SLABS;
         }
-        return TaxSlabs.NEW_REGIME_SLABS;
-    }
-
-    // Returns the rebate threshold for the selected regime.
-    private double getRebateThreshold(String regime) {
-        switch (regime) {
-            case "Old Regime":
-                return TaxSlabs.OLD_REBATE_THRESHOLD;
-            case "New Regime":
-            default:
-                return TaxSlabs.NEW_REBATE_THRESHOLD;
-        }
+        return NEW_REGIME_SLABS;
     }
 
     // Returns the rebate amount for the selected regime.
     private double getRebateAmount(String regime) {
         switch (regime) {
             case "Old Regime":
-                return TaxSlabs.OLD_REBATE_AMOUNT;
+                return OLD_REBATE_AMOUNT;
             case "New Regime":
             default:
-                return TaxSlabs.NEW_REBATE_AMOUNT;
+                return NEW_REBATE_AMOUNT;
         }
     }
 
